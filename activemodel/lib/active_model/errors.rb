@@ -329,7 +329,7 @@ module ActiveModel
       message = message.call if message.respond_to?(:call)
       detail  = normalize_detail(message, options)
       message = normalize_message(attribute, message, options)
-      if exception = options[:strict]
+      if (exception = options[:strict])
         exception = ActiveModel::StrictValidationFailed if exception == true
         raise exception, full_message(attribute, message)
       end
@@ -355,8 +355,7 @@ module ActiveModel
 
       Array(attributes).each do |attribute|
         value = @base.send(:read_attribute_for_validation, attribute)
-        is_empty = value.respond_to?(:empty?) ? value.empty? : false
-        add(attribute, :empty, options) if value.nil? || is_empty
+        add(attribute, :empty, options) if value.nil? || value.respond_to?(:empty?) && value.empty?
       end
     end
 
@@ -504,7 +503,7 @@ module ActiveModel
     end
 
     def normalize_detail(message, options)
-      { error: message }.merge(options.except(*CALLBACKS_OPTIONS + MESSAGE_OPTIONS))
+      { error: message }.merge!(options.except(*CALLBACKS_OPTIONS + MESSAGE_OPTIONS))
     end
   end
 

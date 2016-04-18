@@ -177,7 +177,9 @@ module ActiveModel
       #   person.reset_name_to_default!
       #   person.name                         # => 'Default Name'
       def attribute_method_affix(*affixes)
-        self.attribute_method_matchers += affixes.map! { |affix| AttributeMethodMatcher.new prefix: affix[:prefix], suffix: affix[:suffix] }
+        self.attribute_method_matchers += affixes.map! do |affix|
+          AttributeMethodMatcher.new prefix: affix[:prefix], suffix: affix[:suffix]
+        end
         undefine_attribute_methods
       end
 
@@ -206,7 +208,7 @@ module ActiveModel
       #   person.name_short?     # => true
       #   person.nickname_short? # => true
       def alias_attribute(new_name, old_name)
-        self.attribute_aliases = attribute_aliases.merge(new_name.to_s => old_name.to_s)
+        self.attribute_aliases = {new_name.to_s => old_name.to_s}.reverse_merge!(attribute_aliases)
         attribute_method_matchers.each do |matcher|
           matcher_new = matcher.method_name(new_name).to_s
           matcher_old = matcher.method_name(old_name).to_s
@@ -358,7 +360,7 @@ module ActiveModel
             # Must try to match prefixes/suffixes first, or else the matcher with no prefix/suffix
             # will match every time.
             matchers = attribute_method_matchers.partition(&:plain?).reverse.flatten(1)
-            matchers.map { |method| method.match(method_name) }.compact
+            matchers.map! { |method| method.match(method_name) }.tap(&:compact!)
           end
         end
 
@@ -400,9 +402,7 @@ module ActiveModel
           end
 
           def match(method_name)
-            if @regex =~ method_name
-              AttributeMethodMatch.new(method_missing_target, $1, method_name)
-            end
+            AttributeMethodMatch.new(method_missing_target, $1, method_name) if @regex =~ method_name
           end
 
           def method_name(attr_name)
@@ -426,12 +426,11 @@ module ActiveModel
     # class belonging to the +clients+ table with a +master_id+ foreign key
     # can instantiate master through <tt>Client#master</tt>.
     def method_missing(method, *args, &block)
-      if respond_to_without_attributes?(method, true)
-        super
-      else
+      unless respond_to_without_attributes?(method, true)
         match = matched_attribute_method(method.to_s)
-        match ? attribute_missing(match, *args, &block) : super
+        match and return(attribute_missing(match, *args, &block))
       end
+      super
     end
 
     # +attribute_missing+ is like +method_missing+, but for attributes. When
@@ -447,15 +446,13 @@ module ActiveModel
     # and <tt>person.respond_to?(:name?)</tt> which will all return +true+.
     alias :respond_to_without_attributes? :respond_to?
     def respond_to?(method, include_private_methods = false)
-      if super
-        true
-      elsif !include_private_methods && super(method, true)
-        # If we're here then we haven't found among non-private methods
-        # but found among all methods. Which means that the given method is private.
-        false
-      else
-        !matched_attribute_method(method.to_s).nil?
-      end
+      return true if super
+
+      # If we're here then we haven't found among non-private methods
+      # but found among all methods. Which means that the given method is private.
+      return false if !include_private_methods && super(method, true)
+
+      !matched_attribute_method(method.to_s).nil?
     end
 
     protected
