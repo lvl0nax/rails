@@ -65,9 +65,7 @@ module ActiveModel
 
         def convert_to_reader_name(method_name)
           attr_name = method_name.to_s
-          if attr_name.end_with?("=")
-            attr_name = attr_name[0..-2]
-          end
+          attr_name.chomp!('=')
           attr_name
         end
       end
